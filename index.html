@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VELOCITY | F1 Team Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@300;400;600;700;900&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Titillium Web', 'sans-serif'],
+                        display: ['Orbitron', 'sans-serif'],
+                    },
+                    colors: {
+                        f1: {
+                            red: '#e10600',
+                            dark: '#0f0f0f',
+                            carbon: '#1a1a1a',
+                            cyan: '#00d2be',
+                            purple: '#bc13fe',
+                            pink: '#ff0080'
+                        }
+                    },
+                    animation: {
+                        'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                        'slide-track': 'slideTrack 20s linear infinite',
+                    },
+                    keyframes: {
+                        glow: {
+                            '0%': { boxShadow: '0 0 5px #00d2be, 0 0 10px #00d2be, 0 0 15px #00d2be' },
+                            '100%': { boxShadow: '0 0 10px #00d2be, 0 0 20px #00d2be, 0 0 30px #00d2be' }
+                        },
+                        slideTrack: {
+                            '0%': { transform: 'translateX(0)' },
+                            '100%': { transform: 'translateX(-50%)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0a0a0a;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+
+        .carbon-fiber {
+            background-image:
+                repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px),
+                repeating-linear-gradient(-45deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px);
+        }
+
+        .neon-border {
+            box-shadow: 0 0 5px #00d2be, inset 0 0 5px #00d2be;
+            border: 1px solid #00d2be;
+        }
+
+        .hud-text {
+            text-shadow: 0 0 10px rgba(0, 210, 190, 0.5);
+        }
+
+        .rpm-bar {
+            background: linear-gradient(90deg, #00d2be 0%, #bc13fe 50%, #e10600 100%);
+        }
+
+        .steering-wheel {
+            transition: transform 0.1s ease-out;
+        }
+
+        .track-line {
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            animation: drawTrack 3s ease-out forwards;
+        }
+
+        @keyframes drawTrack {
+            to { stroke-dashoffset: 0; }
+        }
+
+        .tire-wear {
+            transition: width 0.3s ease, background-color 0.3s ease;
+        }
+
+        .drs-zone {
+            background: linear-gradient(90deg, transparent, rgba(0, 210, 190, 0.3), transparent);
+            animation: drsPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes drsPulse {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.8; }
+        }
+
+        .speed-lines {
+            background: repeating-linear-gradient(
+                90deg,
+                transparent,
+                transparent 50px,
+                rgba(255,255,255,0.1) 50px,
+                rgba(255,255,255,0.1) 51px
+            );
+            animation: speedMove 0.5s linear infinite;
+        }
+
+        @keyframes speedMove {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-51px); }
+        }
+
+        .checkered {
+            background-image:
+                linear-gradient(45deg, #ccc 25%, transparent 25%),
+                linear-gradient(-45deg, #ccc 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #ccc 75%),
+                linear-gradient(-45deg, transparent 75%, #ccc 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+    </style>
+</head>
+<body class="font-sans bg-f1-dark carbon-fiber">
+
+    <!-- HUD Overlay -->
+    <div class="fixed top-0 left-0 w-full h-full pointer-events-none z-50">
+        <div class="absolute top-4 left-4 flex items-center gap-2 opacity-50">
+            <div class="w-2 h-2 bg-f1-cyan rounded-full animate-pulse"></div>
+            <span class="text-xs font-mono tracking-widest">LIVE TELEMETRY</span>
+        </div>
+        <div class="absolute top-4 right-4 text-right">
+            <div class="text-3xl font-display font-bold text-f1-cyan hud-text" id="session-clock">00:00:00</div>
+            <div class="text-xs text-gray-400 font-mono">SESSION TIME</div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="fixed w-full z-40 bg-f1-dark/90 backdrop-blur-md border-b border-f1-cyan/30">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-f1-cyan to-f1-purple rounded flex items-center justify-center transform skew-x-[-10deg]">
+                        <i class="fas fa-flag-checkered text-white text-xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-display text-2xl font-bold tracking-tighter italic">VELOCITY</h1>
+                        <p class="text-[10px] text-f1-cyan tracking-widest -mt-1">F1 MANAGER 24</p>
+                    </div>
+                </div>
+
+                <div class="hidden md:flex gap-8">
+                    <button onclick="switchTab('garage')" class="nav-btn active text-f1-cyan border-b-2 border-f1-cyan pb-1 font-bold tracking-wide hover:text-white transition">GARAGE</button>
+                    <button onclick="switchTab('race')" class="nav-btn text-gray-400 pb-1 font-bold tracking-wide hover:text-f1-cyan transition">RACE CONTROL</button>
+                    <button onclick="switchTab('strategy')" class="nav-btn text-gray-400 pb-1 font-bold tracking-wide hover:text-f1-cyan transition">STRATEGY</button>
+                    <button onclick="switchTab('career')" class="nav-btn text-gray-400 pb-1 font-bold tracking-wide hover:text-f1-cyan transition">CAREER</button>
+                </div>
+
+                <div class="flex items-center gap-4">
+                    <div class="hidden sm:flex items-center gap-2 bg-f1-carbon px-3 py-1 rounded-full border border-gray-700">
+                        <i class="fas fa-coins text-yellow-500"></i>
+                        <span class="font-mono font-bold text-yellow-400">2,450,000</span>
+                    </div>
+                    <button class="w-10 h-10 rounded-full bg-f1-cyan/20 border border-f1-cyan flex items-center justify-center hover:bg-f1-cyan/40 transition">
+                        <i class="fas fa-user text-f1-cyan"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="pt-20 pb-12 px-4 max-w-7xl mx-auto">
+
+        <!-- GARAGE SECTION -->
+        <section id="garage" class="tab-content space-y-8">
+            <!-- Car Showcase -->
+            <div class="relative h-[500px] bg-gradient-to-b from-f1-carbon to-black rounded-3xl overflow-hidden border border-gray-800 group">
+                <div class="absolute inset-0 speed-lines opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+
+                <!-- Car Stats Overlay -->
+                <div class="absolute top-6 left-6 space-y-4 z-10">
+                    <div class="bg-black/80 backdrop-blur border border-f1-cyan/50 p-4 rounded-lg">
+                        <h3 class="text-f1-cyan font-display font-bold mb-2">CAR SETUP</h3>
+                        <div class="space-y-2 w-48">
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span>AERO EFFICIENCY</span>
+                                    <span class="text-f1-cyan">87%</span>
+                                </div>
+                                <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gradient-to-r from-f1-cyan to-f1-purple w-[87%]"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span>POWER UNIT</span>
+                                    <span class="text-f1-red">92%</span>
+                                </div>
+                                <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gradient-to-r from-yellow-500 to-f1-red w-[92%]"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-xs mb-1">
+                                    <span>HANDLING</span>
+                                    <span class="text-green-400">78%</span>
+                                </div>
+                                <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gradient-to-r from-green-400 to-green-600 w-[78%]"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Interactive Car -->
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <div class="relative w-full max-w-3xl transform transition-transform duration-700 hover:scale-105" id="car-showcase">
+                        <!-- Car Body (CSS Art) -->
+                        <div class="relative mx-auto w-[600px] h-[200px]">
+                            <!-- Rear Wing -->
+                            <div class="absolute -right-4 top-8 w-16 h-24 bg-gray-900 border-2 border-f1-cyan transform skew-x-[-12deg]"></div>
+                            <!-- Main Body -->
+                            <div class="absolute left-0 right-20 top-12 h-32 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 rounded-tr-[100px] rounded-br-[40px] border-t-2 border-b-2 border-f1-cyan shadow-[0_0_30px_rgba(0,210,190,0.3)]">
+                                <!-- Cockpit -->
+                                <div class="absolute left-48 top-4 w-24 h-20 bg-black rounded-full border border-gray-600"></div>
+                                <!-- Front Wing -->
+                                <div class="absolute -left-8 top-16 w-12 h-20 bg-gray-900 border-2 border-f1-cyan rounded-l-lg"></div>
+                                <!-- Number -->
+                                <div class="absolute left-32 top-16 font-display text-6xl font-black text-f1-cyan/80 italic">1</div>
+                                <!-- Sponsor Logos -->
+                                <div class="absolute right-20 top-16 text-xs text-gray-400 font-bold tracking-widest">VELOCITY</div>
+                            </div>
+                            <!-- Wheels -->
+                            <div class="absolute left-12 top-32 w-20 h-20 bg-black rounded-full border-4 border-gray-700 flex items-center justify-center animate-spin-slow" style="animation-duration: 3s;">
+                                <div class="w-12 h-12 border-2 border-f1-cyan rounded-full"></div>
+                            </div>
+                            <div class="absolute right-24 top-32 w-20 h-20 bg-black rounded-full border-4 border-gray-700 flex items-center justify-center animate-spin-slow" style="animation-duration: 3s;">
+                                <div class="w-12 h-12 border-2 border-f1-cyan rounded-full"></div>
+                            </div>
+                            <!-- DRS Light -->
+                            <div class="absolute right-20 top-8 w-4 h-4 bg-green-500 rounded-full animate-pulse shadow-[0_0_10px_#22c55e]" id="drs-indicator"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="absolute bottom-6 right-6 flex gap-2">
+                    <button onclick="toggleDRS()" class="px-6 py-3 bg-f1-cyan/20 border border-f1-cyan text-f1-cyan font-bold rounded hover:bg-f1-cyan hover:text-black transition-all">
+                        DRS <span id="drs-status">OFF</span>
+                    </button>
+                    <button onclick="boostSpeed()" class="px-6 py-3 bg-f1-red/20 border border-f1-red text-f1-red font-bold rounded hover:bg-f1-red hover:text-white transition-all">
+                        OVERTAKE
+                    </button>
+                </div>
+            </div>
+
+            <!-- Upgrades Grid -->
+            <div class="grid md:grid-cols-3 gap-6">
+                <div class="bg-f1-carbon border border-gray-800 rounded-2xl p-6 hover:border-f1-cyan transition-all cursor-pointer group">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="w-12 h-12 bg-f1-cyan/10 rounded-lg flex items-center justify-center text-f1-cyan group-hover:scale-110 transition-transform">
+                            <i class="fas fa-wind text-2xl"></i>
+                        </div>
+                        <span class="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded">LEVEL 4</span>
+                    </div>
+                    <h3 class="font-display font-bold text-lg mb-2">Front Wing</h3>
+                    <p class="text-sm text-gray-400 mb-4">Downforce +12% | Drag -5%</p>
+                    <button class="w-full py-2 border border-f1-cyan/50 text-f1-cyan rounded hover:bg-f1-cyan hover:text-black transition font-bold">
+                        UPGRADE $450K
+                    </button>
+                </div>
+
+                <div class="bg-f1-carbon border border-gray-800 rounded-2xl p-6 hover:border-f1-purple transition-all cursor-pointer group">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="w-12 h-12 bg-f1-purple/10 rounded-lg flex items-center justify-center text-f1-purple group-hover:scale-110 transition-transform">
+                            <i class="fas fa-engine text-2xl"></i>
+                        </div>
+                        <span class="text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded">LEVEL 3</span>
+                    </div>
+                    <h3 class="font-display font-bold text-lg mb-2">Power Unit</h3>
+                    <p class="text-sm text-gray-400 mb-4">HP +25 | Reliability -2%</p>
+                    <button class="w-full py-2 border border-f1-purple/50 text-f1-purple rounded hover:bg-f1-purple hover:text-white transition font-bold">
+                        UPGRADE $890K
+                    </button>
+                </div>
+
+                <div class="bg-f1-carbon border border-gray-800 rounded-2xl p-6 hover:border-f1-red transition-all cursor-pointer group">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="w-12 h-12 bg-f1-red/10 rounded-lg flex items-center justify-center text-f1-red group-hover:scale-110 transition-transform">
+                            <i class="fas fa-tire text-2xl"></i>
+                        </div>
+                        <span class="text-xs bg-gray-500/20 text-gray-400 px-2 py-1 rounded">LEVEL 5</span>
+                    </div>
+                    <h3 class="font-display font-bold text-lg mb-2">Suspension</h3>
+                    <p class="text-sm text-gray-400 mb-4">Handling +8% | Tire Wear -5%</p>
+                    <button class="w-full py-2 border border-f1-red/50 text-f1-red rounded hover:bg-f1-red hover:text-white transition font-bold">
+                        MAXED OUT
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- RACE CONTROL SECTION -->
+        <section id="race" class="tab-content hidden space-y-6">
+            <!-- Live Timing Tower -->
+            <div class="bg-f1-carbon border border-gray-800 rounded-2xl overflow-hidden">
+                <div class="bg-gray-900 p-4 border-b border-gray-800 flex justify-between items-center">
+                    <h2 class="font-display font-bold text-xl flex items-center gap-2">
+                        <i class="fas fa-stopwatch text-f1-cyan"></i>
+                        LIVE TIMING
+                    </h2>
+                    <div class="flex gap-2">
+                        <span class="px-3 py-1 bg-green-500/20 text-green-400 rounded text-xs font-bold">GREEN FLAG</span>
+                        <span class="px-3 py-1 bg-f1-carbon border border-gray-600 rounded text-xs font-mono">LAP 42/58</span>
+                    </div>
+                </div>
+
+                <div class="divide-y divide-gray-800" id="timing-tower">
+                    <!-- Generated by JS -->
+                </div>
+            </div>
+
+            <!-- Track Map & Telemetry -->
+            <div class="grid lg:grid-cols-2 gap-6">
+                <!-- Interactive Track Map -->
+                <div class="bg-f1-carbon border border-gray-800 rounded-2xl p-6 relative overflow-hidden">
+                    <h3 class="font-display font-bold mb-4 text-f1-cyan">MONZA CIRCUIT</h3>
+                    <div class="relative h-64 w-full">
+                        <svg viewBox="0 0 800 400" class="w-full h-full">
+                            <!-- Track -->
+                            <path d="M 50 200 Q 100 100 200 100 L 600 100 Q 700 100 750 200 Q 700 300 600 300 L 400 300 Q 300 300 250 250 L 200 300 Q 100 300 50 200 Z"
+                                  fill="none"
+                                  stroke="#333"
+                                  stroke-width="40"
+                                  class="track-line"/>
+
+                            <!-- Racing Line -->
+                            <path d="M 50 200 Q 100 100 200 100 L 600 100 Q 700 100 750 200 Q 700 300 600 300 L 400 300 Q 300 300 250 250 L 200 300 Q 100 300 50 200 Z"
+                                  fill="none"
+                                  stroke="#00d2be"
+                                  stroke-width="2"
+                                  stroke-dasharray="10,10"
+                                  opacity="0.5"/>
+
+                            <!-- DRS Zones -->
+                            <path d="M 600 100 L 750 200" stroke="rgba(0,210,190,0.3)" stroke-width="40" class="drs-zone"/>
+
+                            <!-- Cars -->
+                            <circle cx="200" cy="100" r="8" fill="#00d2be" class="animate-pulse cursor-pointer hover:r-12 transition-all">
+                                <title>P1 - You</title>
+                            </circle>
+                            <circle cx="180" cy="110" r="6" fill="#e10600" opacity="0.8"/>
+                            <circle cx="160" cy="105" r="6" fill="#ffd700" opacity="0.8"/>
+                            <circle cx="400" cy="300" r="6" fill="#bc13fe" opacity="0.6"/>
+                        </svg>
+                    </div>
+
+                    <!-- Sector Times -->
+                    <div class="grid grid-cols-3 gap-4 mt-4">
+                        <div class="text-center p-3 bg-black/50 rounded border border-f1-cyan/30">
+                            <div class="text-xs text-gray-400">S1</div>
+                            <div class="font-mono font-bold text-f1-cyan">28.432</div>
+                            <div class="text-xs text-green-400">+0.023</div>
+                        </div>
+                        <div class="text-center p-3 bg-black/50 rounded border border-green-500/30">
+                            <div class="text-xs text-gray-400">S2</div>
+                            <div class="font-mono font-bold text-green-400">32.156</div>
+                            <div class="text-xs text-green-400">-0.114</div>
+                        </div>
+                        <div class="text-center p-3 bg-black/50 rounded border border-gray-700">
+                            <div class="text-xs text-gray-400">S3</div>
+                            <div class="font-mono font-bold text-white">29.891</div>
+                            <div class="text-xs text-gray-400">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tire Strategy Live -->
+                <div class="bg-f1-carbon border border-gray-800 rounded-2xl p-6">
+                    <h3 class="font-display font-bold mb-4 text-f1-red">TIRE STATUS</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 text-center font-bold">VER</div>
+                            <div class="flex-1 h-8 bg-gray-800 rounded-full overflow-hidden relative">
+                                <div class="absolute inset-y-0 left-0 bg-gradient-to-r from-yellow-500 to-yellow-600 tire-wear" style="width: 85%"></div>
+                                <div class="absolute inset-0 flex items-center justify-center text-xs font-bold mix-blend-difference">SOFT - 12 LAPS</div>
+                            </div>
+                            <span class="text-xs text-yellow-500 font-mono">85%</span>
+                        </div>
+
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 text-center font-bold text-f1-cyan">YOU</div>
+                            <div class="flex-1 h-8 bg-gray-800 rounded-full overflow-hidden relative">
+                                <div class="absolute inset-y-0 left-0 bg-gradient-to-r from-white to-gray-400 tire-wear" style="width: 62%"></div>
+                                <div class="absolute inset-0 flex items-center justify-center text-xs font-bold text-black">HARD - 28 LAPS</div>
+                            </div>
+                            <span class="text-xs text-white font-mono">62%</span>
+                        </div>
+
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 text-center font-bold">HAM</div>
+                            <div class="flex-1 h-8 bg-gray-800 rounded-full overflow-hidden relative">
+                                <div class="absolute inset-y-0 left-0 bg-gradient-to-r from-f1-red to-orange-600 tire-wear" style="width: 45%"></div>
+                                <div class="absolute inset-0 flex items-center justify-center text-xs font-bold mix-blend-difference">MEDIUM - 18 LAPS</div>
+                            </div>
+                            <span class="text-xs text-orange-400 font-mono">45%</span>
+                        </div>
+                    </div>
+
+                    <!-- Pit Stop Button -->
+                    <button onclick="triggerPitStop()" class="mt-6 w-full py-4 bg-f1-red hover:bg-red-600 text-white font-display font-bold rounded-lg transition-all transform hover:scale-[1.02] border border-f1-red shadow-[0_0_20px_rgba(225,6,0,0.4)]">
+                        <i class="fas fa-tools mr-2"></i> BOX BOX BOX
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- STRATEGY SECTION -->
+        <section id="strategy" class="tab-content hidden">
+            <div class="bg-f1-carbon border border-gray-800 rounded-2xl p-8 mb-6">
+                <h2 class="font-display text-2xl font-bold mb-6 flex items-center gap-2">
+                    <i class="fas fa-calculator text-f1-purple"></i>
+                    RACE STRATEGY SIMULATOR
+                </h2>
+
+                <div class="grid md:grid-cols-3 gap-8">
+                    <!-- Inputs -->
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-2">Track</label>
+                            <select class="w-full bg-black border border-gray-700 rounded p-3 text-white focus:border-f1-cyan outline-none">
+                                <option>Monza - Italy</option>
+                                <option>Silverstone - UK</option>
+                                <option>Spa - Belgium</option>
+                                <option>Suzuka - Japan</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-2">Weather</label>
+                            <div class="flex gap-2">
+                                <button class="flex-1 py-2 bg-f1-cyan/20 border border-f1-cyan text-f1-cyan rounded active-weather">Dry</button>
+                                <button class="flex-1 py-2 bg-gray-800 border border-gray-700 text-gray-400 rounded">Wet</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm text-gray-400 mb-2">Starting Position</label>
+                            <input type="range" min="1" max="20" value="5" class="w-full accent-f1-cyan" oninput="document.getElementById('start-pos').textContent = this.value">
+                            <div class="text-center font-mono text-f1-cyan">P<span id="start-pos">5</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Strategy Visualization -->
+                    <div class="md:col-span-2 bg-black/50 rounded-xl p-6 border border-gray-800">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold">Predicted Strategy</h3>
+                            <span class="text-f1-cyan font-bold">2 STOP</span>
+                        </div>
+
+                        <!-- Stint Bars -->
+                        <div class="space-y-4">
+                            <div class="relative h-12 bg-gray-800 rounded-lg overflow-hidden">
+                                <div class="absolute inset-y-0 left-0 w-[30%] bg-white flex items-center justify-center text-black font-bold text-sm border-r-2 border-black">
+                                    HARD (L1-18)
+                                </div>
+                                <div class="absolute inset-y-0 left-[30%] w-[35%] bg-yellow-500 flex items-center justify-center text-black font-bold text-sm border-r-2 border-black">
+                                    SOFT (L19-38)
+                                </div>
+                                <div class="absolute inset-y-0 left-[65%] w-[35%] bg-yellow-500 flex items-center justify-center text-black font-bold text-sm">
+                                    SOFT (L39-58)
+                                </div>
+                            </div>
+
+                            <div class="flex justify-between text-xs text-gray-400 font-mono">
+                                <span>START</span>
+                                <span>PIT</span>
+                                <span>PIT</span>
+                                <span>FINISH</span>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4 mt-6 pt-6 border-t border-gray-800">
+                            <div class="text-center">
+                                <div class="text-2xl font-display font-bold text-f1-cyan">P3</div>
+                                <div class="text-xs text-gray-400">PREDICTED FINISH</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-display font-bold text-white">1:24:15</div>
+                                <div class="text-xs text-gray-400">RACE TIME</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-display font-bold text-green-400">+12</div>
+                                <div class="text-xs text-gray-400">POINTS</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CAREER SECTION -->
+        <section id="career" class="tab-content hidden">
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-gradient-to-br from-f1-cyan/20 to-f1-purple/20 border border-f1-cyan/50 rounded-2xl p-8 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-f1-cyan/20 rounded-full blur-3xl"></div>
+                    <h3 class="font-display text-3xl font-bold mb-2">SEASON 3</h3>
+                    <p class="text-f1-cyan mb-6">Team Principal</p>
+
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-300">Team Standing</span>
+                            <span class="font-display font-bold text-2xl">3rd</span>
+                        </div>
+                        <div class="w-full bg-gray-800 rounded-full h-2">
+                            <div class="bg-f1-cyan h-2 rounded-full w-[75%]"></div>
+                        </div>
+
+                        <div class="flex justify-between items-center pt-4">
+                            <span class="text-gray-300">Driver Championship</span>
+                            <span class="font-display font-bold text-2xl text-f1-purple">P5</span>
+                        </div>
+                        <div class="w-full bg-gray-800 rounded-full h-2">
+                            <div class="bg-f1-purple h-2 rounded-full w-[60%]"></div>
+                        </div>
+                    </div>
+
+                    <button class="mt-8 w-full py-3 bg-white text-black font-bold rounded hover:bg-f1-cyan transition">
+                        CONTINUE CAREER
+                    </button>
+                </div>
+
+                <!-- Achievements -->
+                <div class="bg-f1-carbon border border-gray-800 rounded-2xl p-6">
+                    <h3 class="font-display font-bold mb-4">RECENT ACHIEVEMENTS</h3>
+                    <div class="space-y-3">
+                        <div class="flex items-center gap-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                            <i class="fas fa-trophy text-yellow-500 text-2xl"></i>
+                            <div>
+                                <div class="font-bold text-yellow-500">PODIUM FINISH</div>
+                                <div class="text-xs text-gray-400">Monza GP - 3rd Place</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4 p-3 bg-f1-cyan/10 border border-f1-cyan/30 rounded-lg">
+                            <i class="fas fa-bolt text-f1-cyan text-2xl"></i>
+                            <div>
+                                <div class="font-bold text-f1-cyan">FASTEST LAP</div>
+                                <div class="text-xs text-gray-400">Spa Francorchamps - 1:42.981</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4 p-3 bg-f1-purple/10 border border-f1-purple/30 rounded-lg">
+                            <i class="fas fa-users text-f1-purple text-2xl"></i>
+                            <div>
+                                <div class="font-bold text-f1-purple">TEAM PLAYER</div>
+                                <div class="text-xs text-gray-400">Executed team orders perfectly</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Pit Stop Modal -->
+    <div id="pit-modal" class="fixed inset-0 bg-black/90 z-50 hidden items-center justify-center backdrop-blur-sm">
+        <div class="bg-f1-carbon border-2 border-f1-red rounded-3xl p-8 max-w-md w-full mx-4 transform scale-95 opacity-0 transition-all duration-300" id="pit-content">
+            <div class="text-center mb-6">
+                <i class="fas fa-tools text-6xl text-f1-red animate-bounce mb-4"></i>
+                <h2 class="font-display text-3xl font-bold text-white">PIT STOP IN PROGRESS</h2>
+            </div>
+
+            <div class="space-y-4 mb-8">
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-400">Old Tires</span>
+                    <span class="text-white">Hard - 28 Laps</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-400">New Tires</span>
+                    <span class="text-yellow-400 font-bold">Soft - Fresh</span>
+                </div>
+                <div class="h-2 bg-gray-800 rounded-full overflow-hidden">
+                    <div class="h-full bg-f1-red w-0 transition-all duration-[2000ms] ease-out" id="pit-progress"></div>
+                </div>
+                <div class="text-center font-mono text-3xl font-bold text-f1-red" id="pit-timer">2.4s</div>
+            </div>
+
+            <button onclick="closePitStop()" class="w-full py-4 bg-gray-800 text-white font-bold rounded hover:bg-gray-700 transition">
+                BACK TO RACE
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Session Clock
+        function updateClock() {
+            const now = new Date();
+            const time = now.toLocaleTimeString('en-GB', { hour12: false });
+            document.getElementById('session-clock').textContent = time;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Tab Switching
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+
+            // Show selected
+            document.getElementById(tabName).classList.remove('hidden');
+
+            // Update nav buttons
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('text-f1-cyan', 'border-b-2', 'border-f1-cyan', 'active');
+                btn.classList.add('text-gray-400');
+            });
+
+            event.target.classList.remove('text-gray-400');
+            event.target.classList.add('text-f1-cyan', 'border-b-2', 'border-f1-cyan', 'active');
+        }
+
+        // Live Timing Data
+        const drivers = [
+            { name: 'VER', team: 'Red Bull', time: '1:24.892', gap: 'LEADER', color: '#e10600' },
+            { name: 'YOU', team: 'Velocity', time: '1:25.104', gap: '+0.212', color: '#00d2be' },
+            { name: 'HAM', team: 'Mercedes', time: '1:25.234', gap: '+0.342', color: '#00d2be' },
+            { name: 'LEC', team: 'Ferrari', time: '1:25.401', gap: '+0.509', color: '#e10600' },
+            { name: 'NOR', team: 'McLaren', time: '1:25.587', gap: '+0.695', color: '#bc13fe' }
+        ];
+
+        function renderTimingTower() {
+            const container = document.getElementById('timing-tower');
+            container.innerHTML = drivers.map((driver, index) => `
+                <div class="flex items-center p-4 hover:bg-white/5 transition-colors group cursor-pointer">
+                    <div class="w-8 font-display font-bold text-gray-500">${index + 1}</div>
+                    <div class="w-2 h-12 rounded-full mr-4" style="background-color: ${driver.color}; box-shadow: 0 0 10px ${driver.color}40"></div>
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-lg ${index === 1 ? 'text-f1-cyan' : 'text-white'}">${driver.name}</span>
+                            <span class="text-xs text-gray-500 border border-gray-700 px-1 rounded">${driver.team}</span>
+                        </div>
+                        <div class="text-xs text-gray-400">Last Lap: ${driver.time}</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="font-mono font-bold ${index === 0 ? 'text-white' : 'text-gray-400'}">${driver.gap}</div>
+                        ${index === 1 ? '<div class="text-xs text-f1-cyan animate-pulse">DRS ENABLED</div>' : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+        renderTimingTower();
+
+        // DRS Toggle
+        let drsActive = false;
+        function toggleDRS() {
+            drsActive = !drsActive;
+            const indicator = document.getElementById('drs-indicator');
+            const status = document.getElementById('drs-status');
+
+            if (drsActive) {
+                indicator.style.backgroundColor = '#00d2be';
+                indicator.style.boxShadow = '0 0 20px #00d2be';
+                status.textContent = 'ON';
+                document.getElementById('car-showcase').style.transform = 'scale(1.05) skewX(-5deg)';
+            } else {
+                indicator.style.backgroundColor = '#22c55e';
+                indicator.style.boxShadow = '0 0 10px #22c55e';
+                status.textContent = 'OFF';
+                document.getElementById('car-showcase').style.transform = 'scale(1) skewX(0deg)';
+            }
+        }
+
+        // Speed Boost Effect
+        function boostSpeed() {
+            const car = document.getElementById('car-showcase');
+            car.style.transition = 'transform 0.5s ease-out';
+            car.style.transform = 'scale(1.1) translateX(50px)';
+
+            setTimeout(() => {
+                car.style.transform = 'scale(1) translateX(0)';
+            }, 500);
+
+            showToast('OVERTAKE MODE ACTIVATED');
+        }
+
+        // Pit Stop Simulation
+        function triggerPitStop() {
+            const modal = document.getElementById('pit-modal');
+            const content = document.getElementById('pit-content');
+            const progress = document.getElementById('pit-progress');
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            setTimeout(() => {
+                content.classList.remove('scale-95', 'opacity-0');
+                content.classList.add('scale-100', 'opacity-100');
+            }, 10);
+
+            setTimeout(() => {
+                progress.style.width = '100%';
+            }, 100);
+
+            setTimeout(() => {
+                document.getElementById('pit-timer').textContent = '2.1s';
+                document.getElementById('pit-timer').classList.add('text-green-400');
+            }, 2000);
+        }
+
+        function closePitStop() {
+            const modal = document.getElementById('pit-modal');
+            const content = document.getElementById('pit-content');
+            const progress = document.getElementById('pit-progress');
+
+            content.classList.add('scale-95', 'opacity-0');
+
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                progress.style.width = '0';
+                document.getElementById('pit-timer').textContent = '2.4s';
+                document.getElementById('pit-timer').classList.remove('text-green-400');
+            }, 300);
+        }
+
+        // Toast Notification
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-8 right-8 bg-f1-cyan text-black px-6 py-4 rounded-lg font-bold shadow-[0_0_20px_rgba(0,210,190,0.5)] z-50 transform translate-y-20 transition-transform duration-300';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            setTimeout(() => toast.classList.remove('translate-y-20'), 100);
+            setTimeout(() => {
+                toast.classList.add('translate-y-20');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Live Updates Simulation
+        setInterval(() => {
+            // Randomly update gaps
+            drivers.forEach((driver, i) => {
+                if (i > 0) {
+                    const currentGap = parseFloat(driver.gap.replace('+', ''));
+                    const change = (Math.random() - 0.5) * 0.1;
+                    const newGap = Math.max(0.1, currentGap + change).toFixed(3);
+                    driver.gap = `+${newGap}`;
+                }
+            });
+            renderTimingTower();
+        }, 3000);
+    </script>
+</body>
+</html>
